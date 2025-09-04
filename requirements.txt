@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+numpy
+pandas
+numpy-financial
+matplotlib
+python-dotenv
+firebase-admin
