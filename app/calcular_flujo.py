@@ -25,14 +25,14 @@ def calcular_payback(flujos):
 
 def calcular_flujo_fotovoltaico(data):
     # Inputs
-    generacion_anual_kwh = data["generacion_anual_kwh"]
+    generacion_inicial = data["generacion_anual_kwh"]
     porcentaje_autoconsumo = data["porcentaje_autoconsumo"]
     consumo_anual_usuario = data["consumo_anual_usuario"]
     precio_compra_kwh = data["precio_compra_kwh"]
     precio_bolsa = data["precio_bolsa"]
     componente_comercializacion = data["componente_comercializacion"]
     capex = data["capex"]
-    opex_anual = data["opex_anual"]
+    opex_inicial = data["opex_anual"]
     horizonte_anios = data["horizonte_anios"]
     tasa_descuento = data["tasa_descuento"]
     crecimiento_energia = data["crecimiento_energia"]
@@ -49,13 +49,6 @@ def calcular_flujo_fotovoltaico(data):
     deduccion_total_renta = 0.175 * capex
     deduccion_anual_renta = deduccion_total_renta / anios_deduccion_renta
 
-    # Energía autoconsumida y excedentes
-    autoconsumo_kwh = generacion_anual_kwh * porcentaje_autoconsumo
-    excedente_total = generacion_anual_kwh - autoconsumo_kwh
-    cruce_posible = max(consumo_anual_usuario - autoconsumo_kwh, 0)
-    excedente1_kwh = min(excedente_total, cruce_posible)
-    excedente2_kwh = max(excedente_total - excedente1_kwh, 0)
-
     # Inicialización
     flujos_sin_bt = [-capex]
     flujos_con_bt = [-capex]
@@ -68,13 +61,28 @@ def calcular_flujo_fotovoltaico(data):
     else:
         cuota_leasing = capex / anios_leasing
 
-    # Tabla resultados
+    # Tabla resultados (sin Flujo Neto ni Flujo Acumulado)
     registros = []
 
     for anio in range(1, horizonte_anios + 1):
+        # 📉 Degradación de módulos FV
+        generacion_anual_kwh = generacion_inicial * ((1 - 0.005) ** (anio - 1))
+
+        # Precios de energía
         precio_compra_kwh_anio = precio_compra_kwh * (1 + crecimiento_energia) ** (anio - 1)
         precio_bolsa_anio = precio_bolsa * (1 + crecimiento_bolsa) ** (anio - 1)
 
+        # OPEX crece 3% anual
+        opex_anual = opex_inicial * ((1.03) ** (anio - 1))
+
+        # Energía autoconsumida y excedentes
+        autoconsumo_kwh = generacion_anual_kwh * porcentaje_autoconsumo
+        excedente_total = generacion_anual_kwh - autoconsumo_kwh
+        cruce_posible = max(consumo_anual_usuario - autoconsumo_kwh, 0)
+        excedente1_kwh = min(excedente_total, cruce_posible)
+        excedente2_kwh = max(excedente_total - excedente1_kwh, 0)
+
+        # Ingresos
         ingreso_autoconsumo = autoconsumo_kwh * precio_compra_kwh_anio
         ingreso_excedente1 = excedente1_kwh * (precio_compra_kwh_anio - componente_comercializacion)
         ingreso_excedente2 = excedente2_kwh * precio_bolsa_anio
@@ -90,18 +98,25 @@ def calcular_flujo_fotovoltaico(data):
         costo_leasing = cuota_leasing if anio <= anios_leasing else 0
 
         # Flujos
-        flujos_sin_bt.append(flujo_base)
-        flujos_con_bt.append(flujo_base + beneficio_depreciacion + beneficio_renta)
-        flujos_leasing_sin_bt.append(flujo_base - costo_leasing)
-        flujos_leasing_con_bt.append(flujo_base - costo_leasing + beneficio_depreciacion + beneficio_renta)
+        flujo_sin_bt = flujo_base
+        flujo_con_bt = flujo_base + beneficio_depreciacion + beneficio_renta
+        flujo_leasing_sin_bt = flujo_base - costo_leasing
+        flujo_leasing_con_bt = flujo_base - costo_leasing + beneficio_depreciacion + beneficio_renta
 
+        flujos_sin_bt.append(flujo_sin_bt)
+        flujos_con_bt.append(flujo_con_bt)
+        flujos_leasing_sin_bt.append(flujo_leasing_sin_bt)
+        flujos_leasing_con_bt.append(flujo_leasing_con_bt)
+
+        # Tabla base (sin Flujo Neto ni Flujo Acumulado)
         registros.append({
             "Año": anio,
+            "Generación (kWh)": round(generacion_anual_kwh, 0),
             "Tarifa Energía (COP/kWh)": round(precio_compra_kwh_anio, 2),
             "Ingreso Autoconsumo": round(ingreso_autoconsumo, 0),
             "Ingreso Excedente1": round(ingreso_excedente1, 0),
             "Ingreso Excedente2": round(ingreso_excedente2, 0),
-            "OPEX": opex_anual,
+            "OPEX": round(opex_anual, 0),
             "Costo Leasing": round(costo_leasing, 0),
             "Beneficio Depreciación": round(beneficio_depreciacion, 0),
             "Beneficio Renta": round(beneficio_renta, 0),
